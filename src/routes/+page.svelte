@@ -28,31 +28,21 @@
 	</div>
 
 	<!-- Category Filter -->
-	<div class="flex justify-center gap-4 mb-12">
+	<div class="flex justify-center gap-4 mb-12 flex-wrap">
 		<button
 			on:click={() => selectedCategory = 'all'}
 			class="px-4 py-2 rounded-full transition-colors {selectedCategory === 'all' ? 'bg-gray-900 text-white' : 'bg-gray-200 text-gray-700 hover:bg-gray-300'}"
 		>
 			All
 		</button>
-		<button
-			on:click={() => selectedCategory = 'landscape'}
-			class="px-4 py-2 rounded-full transition-colors {selectedCategory === 'landscape' ? 'bg-gray-900 text-white' : 'bg-gray-200 text-gray-700 hover:bg-gray-300'}"
-		>
-			Landscape
-		</button>
-		<button
-			on:click={() => selectedCategory = 'street'}
-			class="px-4 py-2 rounded-full transition-colors {selectedCategory === 'street' ? 'bg-gray-900 text-white' : 'bg-gray-200 text-gray-700 hover:bg-gray-300'}"
-		>
-			Street
-		</button>
-		<button
-			on:click={() => selectedCategory = 'nature'}
-			class="px-4 py-2 rounded-full transition-colors {selectedCategory === 'nature' ? 'bg-gray-900 text-white' : 'bg-gray-200 text-gray-700 hover:bg-gray-300'}"
-		>
-			Nature
-		</button>
+		{#each data.categories as category}
+			<button
+				on:click={() => selectedCategory = category}
+				class="px-4 py-2 rounded-full transition-colors capitalize {selectedCategory === category ? 'bg-gray-900 text-white' : 'bg-gray-200 text-gray-700 hover:bg-gray-300'}"
+			>
+				{category}
+			</button>
+		{/each}
 	</div>
 
 	<!-- Photo Grid -->
