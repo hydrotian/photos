@@ -87,11 +87,14 @@ Images are automatically optimized by the processing script:
 
 The site automatically deploys to GitHub Pages when you push to the `main` branch.
 
-1. Enable GitHub Pages in repository settings
-2. Set source to "GitHub Actions"
-3. Push to main branch
+### Quick Setup
 
-Your site will be available at: `https://hydrotian.github.io/photos/`
+1. Go to repository **Settings** → **Pages**
+2. Under **Source**, select "GitHub Actions"
+3. Push to main branch
+4. Site will be live at: `https://hydrotian.github.io/photos/`
+
+**See [DEPLOYMENT.md](DEPLOYMENT.md) for detailed setup instructions and troubleshooting.**
 
 ## Structure
 
