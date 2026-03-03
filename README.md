@@ -33,20 +33,24 @@ This site now has an automated workflow for adding photos!
 
 ### Quick Workflow (Recommended)
 
-1. **Export from Lightroom**: Export your photos as full-size WebP files
-2. **Place in temp folder**: Put all WebP files in the `temp-photos/` directory
-3. **Run the script**:
+1. **Export from Lightroom**: Export JPEG/WebP files into category folders under one root directory (for example `/path/to/LR_processed/Birds`, `/path/to/LR_processed/Travel`)
+2. **Run the script**:
    ```bash
-   npm run process-photos
+   npm run process-photos -- /path/to/LR_processed
    ```
-4. **Enter category**: When prompted, enter the category name (e.g., landscape, street, nature, travel)
-5. **Edit metadata**: Optionally edit `src/lib/photo-data.json` to add locations and descriptions
-6. **Build**: Run `npm run build` to rebuild the site
+3. **Optional auto git**:
+   ```bash
+   npm run process-photos -- /path/to/LR_processed --commit --push
+   ```
+4. **Edit metadata**: Optionally edit `src/lib/photo-data.json` to add locations and descriptions
+5. **Build**: Run `npm run build` to rebuild the site
 
 That's it! The script will:
-- ✓ Create thumbnails automatically (800x800px)
+- ✓ Detect new photos in existing categories by `category + slug`
+- ✓ Convert and resize full images to web-friendly WebP (`2400px` max edge, quality `82`)
+- ✓ Create thumbnails automatically (800x800px, quality `82`)
 - ✓ Extract EXIF data (camera, lens, settings, date)
-- ✓ Organize photos into category folders
+- ✓ Organize photos into `static/images/<category>/` using source folder names
 - ✓ Update the photo database
 - ✓ Categories will appear automatically on the website
 
@@ -79,9 +83,9 @@ If you prefer to add photos manually:
 
 Images are automatically optimized by the processing script:
 
-- **Format**: WebP (25-30% smaller than JPEG)
-- **Thumbnails**: 800x800px, quality 85
-- **Full images**: Keep original size from Lightroom export
+- **Format**: WebP
+- **Full images**: resized to max 2400x2400, quality 82
+- **Thumbnails**: 800x800px, quality 82
 
 ## Deployment
 

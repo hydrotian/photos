@@ -5,10 +5,10 @@ This guide explains how to easily add photos to your photography portfolio websi
 ## Overview
 
 The workflow is designed to be simple:
-1. Export photos from Lightroom as WebP
-2. Drop them in a temp folder
-3. Run a script
-4. Done!
+1. Export photos from Lightroom (JPEG/WebP)
+2. Place them in category subfolders under one root folder
+3. Run a script with that root path
+4. Done
 
 ## Prerequisites
 
@@ -30,26 +30,36 @@ In Adobe Lightroom:
 1. Select the photos you want to publish
 2. File → Export
 3. Export settings:
-   - **Format**: WebP
-   - **Quality**: 90-95
-   - **Size**: Your preference (recommended: 2000-3000px on longest side)
+   - **Format**: JPEG or WebP
+   - **Quality**: 85-95
+   - **Size**: Original export is fine (script will resize for web)
    - **Sharpening**: Output sharpening for screen
-4. Export to your `temp-photos/` folder in this project
+4. Export to category folders under a single root path, for example:
+   - `/path/to/LR_processed/Birds`
+   - `/path/to/LR_processed/Travel`
+   - `/path/to/LR_processed/2025_China_trip`
 
 ### 2. Run the Processing Script
 
 ```bash
-npm run process-photos
+npm run process-photos -- /path/to/LR_processed
 ```
 
 The script will:
-- Find all `.webp` files in `temp-photos/`
-- Ask you for a category name (e.g., "landscape", "street", "nature", "travel")
-- For each photo:
-  - Create an 800x800px thumbnail with `-thumb.webp` suffix
+- Scan each first-level subfolder as a category
+- Find supported image files recursively (`.jpg`, `.jpeg`, `.png`, `.webp`, `.tif`, `.tiff`, `.heic`, `.heif`)
+- Detect existing photos by `category + slug` and skip them
+- For each new photo:
+  - Create resized full image as WebP (max 2400x2400, quality 82)
+  - Create thumbnail as WebP (`-thumb.webp`, 800x800, quality 82)
   - Extract EXIF data (camera, lens, settings, date)
-  - Copy both files to `static/images/{category}/`
+  - Write images to `static/images/{category}/`
   - Add an entry to `src/lib/photo-data.json`
+
+Optional auto-commit and push:
+```bash
+npm run process-photos -- /path/to/LR_processed --commit --push
+```
 
 ### 3. Review and Edit Metadata
 
@@ -97,9 +107,7 @@ After processing, your structure will look like:
 
 ```
 photos/
-├── temp-photos/              # Put exported WebP files here
-│   ├── photo1.webp
-│   └── photo2.webp
+├── temp-photos/              # Legacy mode staging folder (optional)
 ├── static/
 │   └── images/
 │       ├── landscape/        # Category folders
@@ -132,18 +140,13 @@ You can create any category name you want - they'll appear automatically on the 
 ## Tips
 
 ### Batch Processing
-You can add multiple photos at once. Just put all the WebP files in `temp-photos/` before running the script. They'll all be assigned to the same category.
+You can add multiple photos at once across many categories by placing them under one source root path and running the script once.
 
 ### Multiple Categories
-To add photos to different categories:
-1. Add first batch to `temp-photos/`
-2. Run `npm run process-photos` and enter first category
-3. Move/delete processed files from `temp-photos/`
-4. Add second batch
-5. Run script again with second category
+The script automatically handles multiple categories in one run from subfolders in the source root.
 
 ### Cleaning Up
-After processing, you can delete the files from `temp-photos/` or keep them as originals. The folder is in `.gitignore` so it won't be committed to git.
+Keep originals outside this repository (recommended). Only optimized WebP outputs should be committed to reduce repo size and page load times.
 
 ### EXIF Data
 The script automatically extracts:
@@ -154,9 +157,9 @@ The script automatically extracts:
 - GPS coordinates (if available)
 
 ### Image Sizes
-- **Full images**: Keep at reasonable size (2000-3000px, ~200-800KB)
-- **Thumbnails**: Auto-generated at 800x800px, quality 85
-- **Format**: WebP provides excellent quality at 25-30% smaller file size than JPEG
+- **Full images**: Auto-resized to max 2400x2400, quality 82
+- **Thumbnails**: Auto-generated at 800x800, quality 82
+- **Format**: WebP output for all generated files
 
 ## Troubleshooting
 
@@ -185,10 +188,10 @@ Categories are dynamically loaded from the photos in `photo-data.json`. Make sur
 The processing script is located at `scripts/process-photos.js`.
 
 You can customize:
-- **Thumbnail size**: Change `THUMB_WIDTH` and `THUMB_HEIGHT` (line 19-20)
-- **Thumbnail quality**: Modify `.webp({ quality: 85 })` (line 95)
-- **EXIF fields**: Add more fields in the `extractExif` function (line 58)
-- **Slug generation**: Customize filename-to-slug conversion (line 50)
+- **Full image size/quality**: Update `FULL_MAX_WIDTH`, `FULL_MAX_HEIGHT`, and `FULL_QUALITY`
+- **Thumbnail size/quality**: Update `THUMB_WIDTH`, `THUMB_HEIGHT`, and `THUMB_QUALITY`
+- **Supported file types**: Edit `SUPPORTED_EXTENSIONS`
+- **EXIF fields**: Edit the `pick` list in `extractExif()`
 
 ## Questions?
 
