@@ -5,7 +5,7 @@
 	import type { PageData } from './$types';
 
 	export let data: PageData;
-	const { photo } = data;
+	$: photo = data.photo;
 
 	function formatCategory(name: string) {
 		return name.replace(/_/g, ' ');
@@ -42,7 +42,7 @@
 	<!-- Back button -->
 	<a
 		href={backHref}
-		class="inline-flex items-center text-gray-600 hover:text-gray-900 mb-8 transition-colors"
+		class="inline-flex items-center text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-100 mb-8 transition-colors"
 	>
 		<svg class="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
 			<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18"/>
@@ -53,7 +53,7 @@
 	<div class="grid grid-cols-1 xl:grid-cols-[minmax(0,1fr)_21rem] gap-6 xl:gap-10">
 		<!-- Image -->
 		<div class="xl:col-span-1">
-			<div class="relative bg-gray-900 rounded-lg overflow-hidden">
+			<div class="group relative bg-gray-900 rounded-lg overflow-hidden">
 				<img
 					src="{base}/{photo.image}"
 					alt={photo.title}
@@ -65,7 +65,7 @@
 						type="button"
 						aria-label="Previous photo"
 						on:click={() => goToPhoto(prevHref)}
-						class="absolute z-20 left-4 top-1/2 -translate-y-1/2 w-12 h-12 rounded-full bg-black/25 backdrop-blur-sm text-white hover:bg-black/40 transition-colors flex items-center justify-center"
+						class="absolute z-20 left-4 top-1/2 -translate-y-1/2 w-12 h-12 rounded-full bg-black/25 backdrop-blur-sm text-white hover:bg-black/40 transition-all flex items-center justify-center opacity-0 group-hover:opacity-100"
 					>
 						<svg class="w-7 h-7" fill="none" stroke="currentColor" viewBox="0 0 24 24">
 							<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"/>
@@ -78,7 +78,7 @@
 						type="button"
 						aria-label="Next photo"
 						on:click={() => goToPhoto(nextHref)}
-						class="absolute z-20 right-4 top-1/2 -translate-y-1/2 w-12 h-12 rounded-full bg-black/25 backdrop-blur-sm text-white hover:bg-black/40 transition-colors flex items-center justify-center"
+						class="absolute z-20 right-4 top-1/2 -translate-y-1/2 w-12 h-12 rounded-full bg-black/25 backdrop-blur-sm text-white hover:bg-black/40 transition-all flex items-center justify-center opacity-0 group-hover:opacity-100"
 					>
 						<svg class="w-7 h-7" fill="none" stroke="currentColor" viewBox="0 0 24 24">
 							<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/>
@@ -90,29 +90,48 @@
 
 		<!-- Details -->
 		<div class="xl:col-span-1">
-			<h1 class="text-3xl font-light text-gray-900 mb-4">{photo.title}</h1>
+			<h1 class="text-3xl font-light text-gray-900 dark:text-gray-100 mb-4">{photo.title}</h1>
 
-			<div class="space-y-4 text-gray-600">
+			<div class="space-y-4 text-gray-600 dark:text-gray-400">
 				<div>
-					<h3 class="text-sm font-medium text-gray-900 mb-1">Location</h3>
+					<h3 class="text-sm font-medium text-gray-900 dark:text-gray-100 mb-1">Location</h3>
 					<p>{photo.location}</p>
 				</div>
 
+				{#if photo.lat != null && photo.lng != null}
+					<div>
+						<h3 class="text-sm font-medium text-gray-900 dark:text-gray-100 mb-1">Map</h3>
+						<iframe
+							title="Photo location map"
+							width="100%"
+							height="200"
+							src="https://www.openstreetmap.org/export/embed.html?bbox={photo.lng - 0.05},{photo.lat - 0.05},{photo.lng + 0.05},{photo.lat + 0.05}&layer=mapnik&marker={photo.lat},{photo.lng}"
+							class="rounded-lg border border-gray-200 dark:border-gray-700"
+						></iframe>
+						<a
+							href="https://www.openstreetmap.org/?mlat={photo.lat}&mlon={photo.lng}#map=14/{photo.lat}/{photo.lng}"
+							target="_blank"
+							rel="noopener noreferrer"
+							class="text-xs text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-400 mt-1 inline-block"
+						>View larger map ↗</a>
+					</div>
+				{/if}
+
 				<div>
-					<h3 class="text-sm font-medium text-gray-900 mb-1">Date</h3>
+					<h3 class="text-sm font-medium text-gray-900 dark:text-gray-100 mb-1">Date</h3>
 					<p>{new Date(photo.date).toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })}</p>
 				</div>
 
 				{#if photo.description}
 					<div>
-						<h3 class="text-sm font-medium text-gray-900 mb-1">Description</h3>
+						<h3 class="text-sm font-medium text-gray-900 dark:text-gray-100 mb-1">Description</h3>
 						<p>{photo.description}</p>
 					</div>
 				{/if}
 
 				{#if photo.camera || photo.lens}
-					<div class="pt-4 border-t border-gray-200">
-						<h3 class="text-sm font-medium text-gray-900 mb-2">Equipment</h3>
+					<div class="pt-4 border-t border-gray-200 dark:border-gray-700">
+						<h3 class="text-sm font-medium text-gray-900 dark:text-gray-100 mb-2">Equipment</h3>
 						{#if photo.camera}
 							<p class="text-sm">Camera: {photo.camera}</p>
 						{/if}
@@ -124,13 +143,13 @@
 
 				{#if photo.settings}
 					<div>
-						<h3 class="text-sm font-medium text-gray-900 mb-1">Settings</h3>
+						<h3 class="text-sm font-medium text-gray-900 dark:text-gray-100 mb-1">Settings</h3>
 						<p class="text-sm">{photo.settings}</p>
 					</div>
 				{/if}
 
 				<div class="pt-4">
-					<span class="inline-block px-3 py-1 text-sm bg-gray-200 text-gray-700 rounded-full">
+					<span class="inline-block px-3 py-1 text-sm bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-full">
 						{formatCategory(photo.category)}
 					</span>
 				</div>

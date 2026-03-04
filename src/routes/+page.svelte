@@ -44,14 +44,14 @@
 	<div class="flex justify-center gap-4 mb-10 flex-wrap">
 		<a
 			href={categoryHref('all')}
-			class="px-4 py-2 rounded-full transition-colors {selectedCategory === 'all' ? 'bg-gray-900 text-white' : 'bg-gray-200 text-gray-700 hover:bg-gray-300'}"
+			class="px-4 py-2 rounded-full transition-colors {selectedCategory === 'all' ? 'bg-gray-900 text-white' : 'bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-300 dark:hover:bg-gray-600'}"
 		>
 			All
 		</a>
 		{#each data.categories as category}
 			<a
 				href={categoryHref(category)}
-				class="px-4 py-2 rounded-full transition-colors capitalize {selectedCategory === category ? 'bg-gray-900 text-white' : 'bg-gray-200 text-gray-700 hover:bg-gray-300'}"
+				class="px-4 py-2 rounded-full transition-colors capitalize {selectedCategory === category ? 'bg-gray-900 text-white' : 'bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-300 dark:hover:bg-gray-600'}"
 			>
 				{formatCategory(category)}
 			</a>
@@ -107,7 +107,7 @@
 
 	{#if selectedCategory !== 'all' && filteredPhotos.length === 0}
 		<div class="text-center py-12">
-			<p class="text-gray-500">No photos in this category yet.</p>
+			<p class="text-gray-500 dark:text-gray-400">No photos in this category yet.</p>
 		</div>
 	{/if}
 </div>

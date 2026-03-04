@@ -4,8 +4,9 @@
  * Photo processing script.
  *
  * New mode (recommended):
- *   node scripts/process-photos.js /path/to/LR_processed [--commit] [--push]
- *   node scripts/process-photos.js --delete-category <category> [--commit] [--push]
+ *   node scripts/process-photos.js /path/to/LR_processed
+ *   node scripts/process-photos.js --delete-category <category>
+ *   node scripts/process-photos.js --fill-gps <category> --lat <lat> --lng <lng>
  *
  * Legacy mode:
  *   node scripts/process-photos.js
@@ -18,7 +19,6 @@
 
 import fs from 'fs';
 import path from 'path';
-import { spawnSync } from 'child_process';
 import { fileURLToPath } from 'url';
 import sharp from 'sharp';
 import exifr from 'exifr';
@@ -138,21 +138,13 @@ function parseArgs(rawArgs) {
 	const args = [...rawArgs];
 	let sourceRoot = null;
 	let deleteCategory = null;
-	let shouldCommit = false;
-	let shouldPush = false;
+	let fillGpsCategory = null;
+	let fillGpsLat = null;
+	let fillGpsLng = null;
 
 	for (let i = 0; i < args.length; i += 1) {
 		const arg = args[i];
 
-		if (arg === '--commit') {
-			shouldCommit = true;
-			continue;
-		}
-		if (arg === '--push') {
-			shouldPush = true;
-			shouldCommit = true;
-			continue;
-		}
 		if (arg === '--delete-category' || arg === '--delete-folder') {
 			const nextValue = args[i + 1] || null;
 			if (!nextValue || nextValue.startsWith('-')) {
@@ -168,6 +160,45 @@ function parseArgs(rawArgs) {
 		}
 		if (arg.startsWith('--delete-folder=')) {
 			deleteCategory = arg.slice('--delete-folder='.length) || null;
+			continue;
+		}
+		if (arg === '--fill-gps') {
+			const nextValue = args[i + 1] || null;
+			if (!nextValue || nextValue.startsWith('-')) {
+				throw new Error('--fill-gps requires a category value.');
+			}
+			fillGpsCategory = nextValue;
+			i += 1;
+			continue;
+		}
+		if (arg.startsWith('--fill-gps=')) {
+			fillGpsCategory = arg.slice('--fill-gps='.length) || null;
+			continue;
+		}
+		if (arg === '--lat') {
+			const nextValue = args[i + 1] || null;
+			if (!nextValue || nextValue.startsWith('-') && isNaN(Number(nextValue))) {
+				throw new Error('--lat requires a numeric value.');
+			}
+			fillGpsLat = parseFloat(nextValue);
+			i += 1;
+			continue;
+		}
+		if (arg.startsWith('--lat=')) {
+			fillGpsLat = parseFloat(arg.slice('--lat='.length));
+			continue;
+		}
+		if (arg === '--lng') {
+			const nextValue = args[i + 1] || null;
+			if (!nextValue || nextValue.startsWith('-') && isNaN(Number(nextValue))) {
+				throw new Error('--lng requires a numeric value.');
+			}
+			fillGpsLng = parseFloat(nextValue);
+			i += 1;
+			continue;
+		}
+		if (arg.startsWith('--lng=')) {
+			fillGpsLng = parseFloat(arg.slice('--lng='.length));
 			continue;
 		}
 		if (!arg.startsWith('-') && !sourceRoot) {
@@ -186,15 +217,17 @@ function parseArgs(rawArgs) {
 	return {
 		sourceRoot,
 		deleteCategory,
-		shouldCommit,
-		shouldPush
+		fillGpsCategory,
+		fillGpsLat,
+		fillGpsLng
 	};
 }
 
 function printUsage() {
 	console.log('Usage:');
-	console.log('  node scripts/process-photos.js /path/to/LR_processed [--commit] [--push]');
-	console.log('  node scripts/process-photos.js --delete-category <category> [--commit] [--push]');
+	console.log('  node scripts/process-photos.js /path/to/LR_processed');
+	console.log('  node scripts/process-photos.js --delete-category <category>');
+	console.log('  node scripts/process-photos.js --fill-gps <category> --lat <lat> --lng <lng>');
 	console.log('  node scripts/process-photos.js');
 	console.log('');
 	console.log('New mode expects first-level folders such as Birds/, Travel/, 2025_China_trip/.');
@@ -218,35 +251,76 @@ function savePhotoData(photos) {
 	fs.writeFileSync(DATA_FILE, JSON.stringify(photos, null, 2));
 }
 
+let lastGeocodeTime = 0;
+
+async function reverseGeocode(lat, lng) {
+	const now = Date.now();
+	const elapsed = now - lastGeocodeTime;
+	if (lastGeocodeTime > 0 && elapsed < 1100) {
+		await new Promise((resolve) => setTimeout(resolve, 1100 - elapsed));
+	}
+	lastGeocodeTime = Date.now();
+
+	try {
+		const url = `https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lng}`;
+		const res = await fetch(url, {
+			headers: { 'User-Agent': 'tian-photos-portfolio/1.0' }
+		});
+		if (!res.ok) return '';
+		const data = await res.json();
+		const addr = data.address || {};
+		const city = addr.city || addr.town || addr.village || addr.hamlet || addr.county || addr.state;
+		const country = addr.country;
+		return [city, country].filter(Boolean).join(', ');
+	} catch (error) {
+		console.warn(`Reverse geocoding failed for (${lat}, ${lng}): ${error.message}`);
+		return '';
+	}
+}
+
 async function extractExif(filepath) {
 	try {
-		const exif = await exifr.parse(filepath, {
-			pick: ['DateTimeOriginal', 'Make', 'Model', 'LensModel', 'FNumber', 'ExposureTime', 'ISO', 'FocalLength']
-		});
+		const [exif, gps] = await Promise.all([
+			exifr.parse(filepath, {
+				pick: ['DateTimeOriginal', 'Make', 'Model', 'LensModel', 'FNumber', 'ExposureTime', 'ISO', 'FocalLength']
+			}).catch(() => null),
+			exifr.gps(filepath).catch(() => null)
+		]);
 
-		if (!exif) {
+		if (!exif && !gps) {
 			return {};
 		}
 
-		const camera = exif.Make && exif.Model ? `${exif.Make} ${exif.Model}` : undefined;
-		const lens = exif.LensModel;
+		const camera = exif?.Make && exif?.Model ? `${exif.Make} ${exif.Model}` : undefined;
+		const lens = exif?.LensModel;
 
 		const settings = [];
-		if (exif.ISO) settings.push(`ISO ${exif.ISO}`);
-		if (exif.FNumber) settings.push(`f/${exif.FNumber}`);
-		if (exif.ExposureTime) {
+		if (exif?.ISO) settings.push(`ISO ${exif.ISO}`);
+		if (exif?.FNumber) settings.push(`f/${exif.FNumber}`);
+		if (exif?.ExposureTime) {
 			const shutter = exif.ExposureTime < 1
 				? `1/${Math.round(1 / exif.ExposureTime)}s`
 				: `${exif.ExposureTime}s`;
 			settings.push(shutter);
 		}
-		if (exif.FocalLength) settings.push(`${Math.round(exif.FocalLength)}mm`);
+		if (exif?.FocalLength) settings.push(`${Math.round(exif.FocalLength)}mm`);
+
+		let location = '';
+		let lat, lng;
+		if (gps?.latitude != null && gps?.longitude != null) {
+			lat = parseFloat(gps.latitude.toFixed(6));
+			lng = parseFloat(gps.longitude.toFixed(6));
+			location = await reverseGeocode(lat, lng);
+		}
 
 		return {
 			camera,
 			lens,
 			settings: settings.length > 0 ? settings.join(', ') : undefined,
-			date: exif.DateTimeOriginal ? exif.DateTimeOriginal.toISOString().split('T')[0] : undefined
+			date: exif?.DateTimeOriginal ? exif.DateTimeOriginal.toISOString().split('T')[0] : undefined,
+			location,
+			lat,
+			lng
 		};
 	} catch (error) {
 		console.warn(`Could not extract EXIF from ${filepath}: ${error.message}`);
@@ -329,7 +403,7 @@ async function processPhotoFromPath({ inputPath, categoryRaw, generatedName, sou
 			slug,
 			title: generatedName,
 			date: exifData.date || todayISO(),
-			location: '',
+			location: exifData.location || '',
 			category,
 			thumbnail: `images/${category}/${thumbImageName}`,
 			image: `images/${category}/${fullImageName}`,
@@ -337,6 +411,8 @@ async function processPhotoFromPath({ inputPath, categoryRaw, generatedName, sou
 			camera: exifData.camera,
 			lens: exifData.lens,
 			settings: exifData.settings,
+			...(exifData.lat != null ? { lat: exifData.lat } : {}),
+			...(exifData.lng != null ? { lng: exifData.lng } : {}),
 			sourcePath
 		}
 	};
@@ -348,45 +424,6 @@ function normalizePath(inputPath) {
 		? path.join(process.env.HOME || '', inputPath.slice(1))
 		: inputPath;
 	return path.resolve(expanded);
-}
-
-function runGit(args) {
-	const result = spawnSync('git', args, {
-		cwd: REPO_ROOT,
-		encoding: 'utf-8'
-	});
-
-	if (result.status !== 0) {
-		const stderr = result.stderr?.trim();
-		const stdout = result.stdout?.trim();
-		throw new Error(`git ${args.join(' ')} failed${stderr ? `: ${stderr}` : stdout ? `: ${stdout}` : ''}`);
-	}
-
-	return result.stdout?.trim() || '';
-}
-
-function maybeCommitAndPush({ shouldCommit, shouldPush, commitMessage }) {
-	if (!shouldCommit) {
-		return;
-	}
-
-	runGit(['add', 'src/lib/photo-data.json', 'static/images']);
-
-	const staged = spawnSync('git', ['diff', '--cached', '--quiet', '--', 'src/lib/photo-data.json', 'static/images'], {
-		cwd: REPO_ROOT
-	});
-	if (staged.status === 0) {
-		console.log('No staged changes to commit.');
-		return;
-	}
-
-	runGit(['commit', '-m', commitMessage, '--', 'src/lib/photo-data.json', 'static/images']);
-	console.log(`Committed changes: ${commitMessage}`);
-
-	if (shouldPush) {
-		runGit(['push']);
-		console.log('Pushed commit to remote.');
-	}
 }
 
 function resolveCategoryPath(category) {
@@ -404,7 +441,7 @@ function resolveCategoryPath(category) {
 	return target;
 }
 
-async function runDeleteCategoryMode(categoryInput, options) {
+async function runDeleteCategoryMode(categoryInput) {
 	const category = categorySlug(categoryInput || '');
 	if (!category) {
 		throw new Error('Category is required for delete mode. Use --delete-category <category>.');
@@ -429,17 +466,10 @@ async function runDeleteCategoryMode(categoryInput, options) {
 
 	if (!hasCategoryDir && removedCount === 0) {
 		console.log(`Nothing to delete for category "${category}".`);
-		return;
 	}
-
-	maybeCommitAndPush({
-		shouldCommit: options.shouldCommit,
-		shouldPush: options.shouldPush,
-		commitMessage: `Delete category ${category} (${removedCount} metadata removed)`
-	});
 }
 
-async function runBatchMode(sourceRoot, options) {
+async function runBatchMode(sourceRoot) {
 	const resolvedSourceRoot = normalizePath(sourceRoot);
 	if (!resolvedSourceRoot || !fs.existsSync(resolvedSourceRoot)) {
 		throw new Error(`Source folder does not exist: ${sourceRoot}`);
@@ -502,11 +532,6 @@ async function runBatchMode(sourceRoot, options) {
 
 	if (newPhotos.length === 0) {
 		console.log('\nNo new photos detected.');
-		maybeCommitAndPush({
-			shouldCommit: options.shouldCommit,
-			shouldPush: options.shouldPush,
-			commitMessage: `Import photos from ${path.basename(resolvedSourceRoot)} (${processedCount} new, ${skippedCount} skipped)`
-		});
 		return;
 	}
 
@@ -516,12 +541,6 @@ async function runBatchMode(sourceRoot, options) {
 	console.log(`\nProcessed ${processedCount} new photo(s).`);
 	console.log(`Skipped ${skippedCount} existing photo(s).`);
 	console.log(`Updated ${DATA_FILE}`);
-
-	maybeCommitAndPush({
-		shouldCommit: options.shouldCommit,
-		shouldPush: options.shouldPush,
-		commitMessage: `Import photos from ${path.basename(resolvedSourceRoot)} (${processedCount} new, ${skippedCount} skipped)`
-	});
 }
 
 async function promptCategory() {
@@ -601,25 +620,71 @@ async function runLegacyMode() {
 	console.log(`Processed ${newPhotos.length} new photo(s) from temp-photos.`);
 }
 
+async function runFillGpsMode(categoryInput, lat, lng) {
+	const category = categorySlug(categoryInput || '');
+	if (!category) {
+		throw new Error('Category is required for --fill-gps. Use --fill-gps <category>.');
+	}
+	if (lat == null || isNaN(lat)) {
+		throw new Error('--lat <latitude> is required and must be a number.');
+	}
+	if (lng == null || isNaN(lng)) {
+		throw new Error('--lng <longitude> is required and must be a number.');
+	}
+
+	const roundedLat = parseFloat(lat.toFixed(6));
+	const roundedLng = parseFloat(lng.toFixed(6));
+
+	const photos = loadPhotoData();
+	const targets = photos.filter((p) => p.category === category && p.lat == null);
+
+	if (targets.length === 0) {
+		console.log(`No photos without GPS found in category "${category}".`);
+		return;
+	}
+
+	console.log(`Reverse geocoding (${roundedLat}, ${roundedLng})...`);
+	const location = await reverseGeocode(roundedLat, roundedLng);
+	if (location) {
+		console.log(`Location: ${location}`);
+	} else {
+		console.log('Could not resolve a location name; location field will remain unchanged.');
+	}
+
+	let updatedCount = 0;
+	for (const photo of photos) {
+		if (photo.category !== category || photo.lat != null) continue;
+		photo.lat = roundedLat;
+		photo.lng = roundedLng;
+		if (location && !photo.location) {
+			photo.location = location;
+		}
+		updatedCount += 1;
+	}
+
+	savePhotoData(photos);
+	console.log(`Updated ${updatedCount} photo(s) in category "${category}".`);
+}
+
 async function main() {
 	const args = parseArgs(process.argv.slice(2));
-	if (args.sourceRoot && args.deleteCategory) {
-		throw new Error('Use either import mode or delete mode, not both in one command.');
+	const modeCount = [args.sourceRoot, args.deleteCategory, args.fillGpsCategory].filter(Boolean).length;
+	if (modeCount > 1) {
+		throw new Error('Use only one mode at a time: import, --delete-category, or --fill-gps.');
 	}
 
 	if (args.deleteCategory) {
-		await runDeleteCategoryMode(args.deleteCategory, {
-			shouldCommit: args.shouldCommit,
-			shouldPush: args.shouldPush
-		});
+		await runDeleteCategoryMode(args.deleteCategory);
+		return;
+	}
+
+	if (args.fillGpsCategory) {
+		await runFillGpsMode(args.fillGpsCategory, args.fillGpsLat, args.fillGpsLng);
 		return;
 	}
 
 	if (args.sourceRoot) {
-		await runBatchMode(args.sourceRoot, {
-			shouldCommit: args.shouldCommit,
-			shouldPush: args.shouldPush
-		});
+		await runBatchMode(args.sourceRoot);
 		return;
 	}
 

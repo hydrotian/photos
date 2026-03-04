@@ -1,0 +1,8 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(cmd:*)",
+      "Bash(PATH=\"/c/Program Files/nodejs:$PATH\" npm run:*)"
+    ]
+  }
+}

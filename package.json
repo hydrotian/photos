@@ -8,7 +8,8 @@
     "preview": "vite preview",
     "check": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json",
     "check:watch": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json --watch",
-    "process-photos": "node scripts/process-photos.js"
+    "process-photos": "node scripts/process-photos.js",
+    "set-cover": "node scripts/set-cover.js"
   },
   "devDependencies": {
     "@sveltejs/adapter-static": "^3.0.0",

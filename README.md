@@ -1,175 +1,141 @@
-# Tian Zhou - Photography Portfolio
+# Tian Zhou — Photography Portfolio
 
-A modern, fast photography portfolio website built with SvelteKit and Tailwind CSS.
+A static photography portfolio built with SvelteKit and Tailwind CSS. Deployed automatically to GitHub Pages on every push to `main`.
+
+**Live site:** https://hydrotian.github.io/photos/
+
+---
 
 ## Features
 
-- 🚀 **Blazing Fast**: Static site generation with SvelteKit
-- 📱 **Responsive**: Works beautifully on all devices
-- 🎨 **Clean Design**: Minimalist gallery + category cover layout
-- 🏷️ **Categories**: Dynamic category filters and album cover cards
-- 📸 **Photo Details**: Display EXIF data, location, and description
-- ↔️ **In-Category Navigation**: Previous/next arrows on photo detail pages
-- 🌐 **GitHub Pages**: Free hosting
+- Static site — no server, no runtime API calls
+- Category-based gallery with album cover cards
+- Photo detail pages with EXIF data, location, and prev/next navigation
+- Interactive map on photo detail pages when GPS data is present
+- Automated photo import from Lightroom exports: resizes, converts to WebP, extracts EXIF, reverse-geocodes GPS coordinates
+
+---
 
 ## Local Development
 
 ```bash
-# Install dependencies
-npm install
-
-# Start dev server
-npm run dev
-
-# Build for production
-npm run build
-
-# Preview production build
-npm run preview
+npm install       # install dependencies
+npm run dev       # dev server at http://localhost:5173
+npm run check     # TypeScript/Svelte type checks
+npm run build     # production build into build/
+npm run preview   # preview the production build
 ```
 
-## Adding New Photos
+---
 
-This site now has an automated workflow for adding photos!
+## Photo Import
 
-### Quick Workflow (Recommended)
+### 1. Import photos from Lightroom exports
 
-1. **Export from Lightroom**: Export JPEG/WebP files into category folders under one root directory (for example `/path/to/LR_processed/Birds`, `/path/to/LR_processed/Travel`)
-2. **Run the script**:
-   ```bash
-   npm run process-photos -- /path/to/LR_processed
-   ```
-3. **Optional auto git**:
-   ```bash
-   npm run process-photos -- /path/to/LR_processed --commit --push
-   ```
-4. **Edit metadata**: Optionally edit `src/lib/photo-data.json` to add locations/descriptions and choose category covers
-5. **Build**: Run `npm run build` to rebuild the site
+Organize exports into category subfolders under one root directory:
 
-That's it! The script will:
-- ✓ Name generated photos as `<category>_01`, `<category>_02`, ...
-- ✓ Use the same generated name for `slug` and `title`
-- ✓ Detect already imported files by source path (and legacy `category + slug`)
-- ✓ Convert and resize full images to web-friendly WebP (`2400px` max edge, quality `82`)
-- ✓ Create thumbnails automatically (800x800px, quality `82`)
-- ✓ Extract EXIF data (camera, lens, settings, date)
-- ✓ Organize photos into `static/images/<category>/` using source folder names
-- ✓ Update the photo database
-- ✓ Categories will appear automatically on the website
+```
+/path/to/LR_processed/
+├── Birds/
+│   ├── IMG_001.jpg
+│   └── IMG_002.jpg
+└── Travel/
+    └── IMG_003.jpg
+```
 
-### Delete a Category Folder
+Then run:
 
-To remove one category from the website assets and metadata:
+```bash
+npm run process-photos -- /path/to/LR_processed
+```
+
+Each first-level subfolder becomes a category. The script:
+- Converts and resizes images to WebP (full: max 2400px, quality 82; thumb: 800×800, quality 82)
+- Names files sequentially: `Birds_01.webp`, `Birds_02.webp`, ...
+- Extracts EXIF: camera, lens, ISO/aperture/shutter/focal length, date taken
+- Extracts GPS coordinates and reverse-geocodes them to a location name (e.g. `"Portland, United States"`)
+- Skips already-imported photos (tracked by source path)
+- Updates `src/lib/photo-data.json`
+
+### 2. Fill GPS for a category imported without GPS
+
+If photos were imported before GPS extraction was added, or your camera didn't record coordinates:
+
+```bash
+npm run process-photos -- --fill-gps Birds --lat 45.5051 --lng -122.6750
+```
+
+This sets `lat`/`lng` on all photos in the category that are missing them, and reverse-geocodes once to fill `location` on any photo where it was empty.
+
+### 3. Delete a category
+
+Removes images from `static/images/<category>/` and all matching entries from `photo-data.json`:
 
 ```bash
 npm run process-photos -- --delete-category 2024_China_Huangshan
 ```
 
-Optional auto-commit and push:
+### 4. Set an album cover
+
+On the homepage, each category shows a cover card. By default the first photo in the category is used. Use the `set-cover` script to change it:
 
 ```bash
-npm run process-photos -- --delete-category 2024_China_Huangshan --commit --push
+# List all categories and their current covers
+npm run set-cover
+
+# List photos in a category and pick interactively
+npm run set-cover -- Birds
+
+# Set directly if you know the slug
+npm run set-cover -- Birds Birds_07
 ```
 
-### Choose Album Cover Photo
+The interactive mode shows each photo's slug, title, and thumbnail filename so you can find and preview the image. The choice is stored as `isCategoryCover: true` in `photo-data.json` and survives future photo imports.
 
-Each category card on the homepage uses one cover image.
+### 5. Manually edit metadata
 
-- Set `isCategoryCover: true` on the photo you want as that category's cover in `src/lib/photo-data.json`
-- Keep at most one `isCategoryCover: true` per category
-- If none is set, the category falls back to its default (latest photo in that category)
+After import, open `src/lib/photo-data.json` to add or edit:
+- `location` — human-readable place name (auto-filled from GPS if available)
+- `description` — caption shown on the photo detail page
+- `title` — defaults to the generated filename; edit freely
 
-Example:
-
-```json
-{
-  "slug": "2024_China_Huangshan_07",
-  "category": "2024_China_Huangshan",
-  "isCategoryCover": true
-}
-```
-
-### Gallery Navigation Behavior
-
-- Opening a photo from a category keeps category context via URL query (`?category=...`)
-- Browser Back returns to that same category view
-- Left/right arrow buttons on the detail page move through photos in the same category
-
-### Manual Method
-
-If you prefer to add photos manually:
-
-1. Create a subfolder in `static/images/` with your category name (e.g., `static/images/landscape/`)
-2. Add your full-size image as `photo-name.webp`
-3. Add thumbnail as `photo-name-thumb.webp` (~800x800px)
-4. Add entry to `src/lib/photo-data.json`:
-
-```json
-{
-  "slug": "unique-slug",
-  "title": "Photo Title",
-  "date": "2024-01-15",
-  "location": "Location Name",
-  "category": "landscape",
-  "thumbnail": "images/landscape/photo-thumb.webp",
-  "image": "images/landscape/photo.webp",
-  "description": "Optional description",
-  "camera": "Optional camera info",
-  "lens": "Optional lens info",
-  "settings": "Optional camera settings",
-  "isCategoryCover": false
-}
-```
-
-## Image Optimization
-
-Images are automatically optimized by the processing script:
-
-- **Format**: WebP
-- **Full images**: resized to max 2400x2400, quality 82
-- **Thumbnails**: 800x800px, quality 82
+---
 
 ## Deployment
 
-The site automatically deploys to GitHub Pages when you push to the `main` branch.
+Push to `main` — GitHub Actions builds and deploys automatically.
 
-### Quick Setup
+**One-time setup:**
+1. Repository **Settings** → **Pages** → Source: **GitHub Actions**
+2. **Settings** → **Actions** → **General** → Workflow permissions: **Read and write**
 
-1. Go to repository **Settings** → **Pages**
-2. Under **Source**, select "GitHub Actions"
-3. Push to main branch
-4. Site will be live at: `https://hydrotian.github.io/photos/`
+The workflow runs `npm run build` and publishes the `build/` folder. Takes ~2 minutes.
 
-**See [DEPLOYMENT.md](DEPLOYMENT.md) for detailed setup instructions and troubleshooting.**
+---
 
-## Structure
+## File Structure
 
 ```
 photos/
 ├── scripts/
-│   └── process-photos.js        # Photo processing automation
+│   ├── process-photos.js     # photo import CLI
+│   └── set-cover.js          # album cover picker CLI
 ├── src/
 │   ├── lib/
-│   │   └── photo-data.json      # Photo database (auto-generated)
-│   ├── routes/
-│   │   ├── +layout.svelte       # Main layout with nav/footer
-│   │   ├── +page.svelte         # Gallery grid (dynamic categories)
-│   │   ├── +page.ts             # Loads photos from JSON
-│   │   ├── photo/[slug]/        # Individual photo pages
-│   │   └── about/               # About page
-│   ├── app.css                  # Tailwind styles
-│   └── app.html                 # HTML template
+│   │   └── photo-data.json   # photo database (source of truth)
+│   └── routes/
+│       ├── +page.svelte      # gallery homepage
+│       ├── +page.ts          # data loader + Photo/CategoryCover types
+│       ├── photo/[slug]/     # photo detail page
+│       └── about/
 ├── static/
 │   └── images/
-│       ├── landscape/           # Category folders (auto-created)
-│       ├── street/
-│       └── nature/
-├── temp-photos/                 # Drop WebP files here (gitignored)
-└── package.json
+│       └── <category>/       # WebP images + thumbnails (auto-created)
+└── .github/
+    └── workflows/
+        └── deploy.yml        # GitHub Pages deployment
 ```
 
-See [WORKFLOW.md](WORKFLOW.md) for detailed photo upload instructions.
+---
 
-## License
-
-© 2024 Tian Zhou. All rights reserved.
+© Tian Zhou. All rights reserved.

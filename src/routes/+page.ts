@@ -15,6 +15,8 @@ export interface Photo {
 	settings?: string;
 	isCategoryCover?: boolean;
 	sourcePath?: string;
+	lat?: number;
+	lng?: number;
 }
 
 export interface CategoryCover {
