@@ -6,9 +6,10 @@ A modern, fast photography portfolio website built with SvelteKit and Tailwind C
 
 - 🚀 **Blazing Fast**: Static site generation with SvelteKit
 - 📱 **Responsive**: Works beautifully on all devices
-- 🎨 **Clean Design**: Minimalist gallery layout
-- 🏷️ **Categories**: Filter photos by landscape, street, nature
+- 🎨 **Clean Design**: Minimalist gallery + category cover layout
+- 🏷️ **Categories**: Dynamic category filters and album cover cards
 - 📸 **Photo Details**: Display EXIF data, location, and description
+- ↔️ **In-Category Navigation**: Previous/next arrows on photo detail pages
 - 🌐 **GitHub Pages**: Free hosting
 
 ## Local Development
@@ -42,7 +43,7 @@ This site now has an automated workflow for adding photos!
    ```bash
    npm run process-photos -- /path/to/LR_processed --commit --push
    ```
-4. **Edit metadata**: Optionally edit `src/lib/photo-data.json` to add locations and descriptions
+4. **Edit metadata**: Optionally edit `src/lib/photo-data.json` to add locations/descriptions and choose category covers
 5. **Build**: Run `npm run build` to rebuild the site
 
 That's it! The script will:
@@ -70,6 +71,30 @@ Optional auto-commit and push:
 npm run process-photos -- --delete-category 2024_China_Huangshan --commit --push
 ```
 
+### Choose Album Cover Photo
+
+Each category card on the homepage uses one cover image.
+
+- Set `isCategoryCover: true` on the photo you want as that category's cover in `src/lib/photo-data.json`
+- Keep at most one `isCategoryCover: true` per category
+- If none is set, the category falls back to its default (latest photo in that category)
+
+Example:
+
+```json
+{
+  "slug": "2024_China_Huangshan_07",
+  "category": "2024_China_Huangshan",
+  "isCategoryCover": true
+}
+```
+
+### Gallery Navigation Behavior
+
+- Opening a photo from a category keeps category context via URL query (`?category=...`)
+- Browser Back returns to that same category view
+- Left/right arrow buttons on the detail page move through photos in the same category
+
 ### Manual Method
 
 If you prefer to add photos manually:
@@ -91,7 +116,8 @@ If you prefer to add photos manually:
   "description": "Optional description",
   "camera": "Optional camera info",
   "lens": "Optional lens info",
-  "settings": "Optional camera settings"
+  "settings": "Optional camera settings",
+  "isCategoryCover": false
 }
 ```
 

@@ -13,6 +13,8 @@ export interface Photo {
 	camera?: string;
 	lens?: string;
 	settings?: string;
+	isCategoryCover?: boolean;
+	sourcePath?: string;
 }
 
 export interface CategoryCover {
@@ -38,10 +40,11 @@ export const load: PageLoad = async () => {
 	const categoryCovers: CategoryCover[] = discoveredCategories
 		.map((category) => {
 			const categoryPhotos = photos.filter((photo) => photo.category === category);
+			const selectedCover = categoryPhotos.find((photo) => photo.isCategoryCover) || categoryPhotos[0];
 			return {
 				category,
 				count: categoryPhotos.length,
-				cover: categoryPhotos[0]
+				cover: selectedCover
 			};
 		})
 		.filter((item): item is CategoryCover => Boolean(item.cover))

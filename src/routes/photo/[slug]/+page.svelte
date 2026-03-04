@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { goto } from '$app/navigation';
 	import { base } from '$app/paths';
 	import { page } from '$app/stores';
 	import type { PageData } from './$types';
@@ -10,6 +11,11 @@
 		return name.replace(/_/g, ' ');
 	}
 
+	function goToPhoto(href: string | null) {
+		if (!href) return;
+		goto(href);
+	}
+
 	$: requestedCategory = (new URL($page.url.href).searchParams.get('category') || '').trim();
 	$: hasRequestedContext = Boolean(
 		requestedCategory && data.photos.some((p) => p.slug === photo.slug && p.category === requestedCategory)
@@ -18,7 +24,9 @@
 	$: categoryQuery = `?category=${encodeURIComponent(activeCategory)}`;
 	$: backHref = `${base}/${categoryQuery}`;
 	$: categoryPhotos = data.photos.filter((p) => p.category === activeCategory);
-	$: currentIndex = categoryPhotos.findIndex((p) => p.slug === photo.slug && p.category === photo.category);
+	$: currentIndex = categoryPhotos.findIndex(
+		(p) => p.image === photo.image || (p.slug === photo.slug && p.category === photo.category)
+	);
 	$: prevPhoto = currentIndex > 0 ? categoryPhotos[currentIndex - 1] : null;
 	$: nextPhoto = currentIndex >= 0 && currentIndex < categoryPhotos.length - 1 ? categoryPhotos[currentIndex + 1] : null;
 	$: prevHref = prevPhoto ? `${base}/photo/${prevPhoto.slug}${categoryQuery}` : null;
@@ -53,27 +61,29 @@
 				/>
 
 				{#if prevHref}
-					<a
-						href={prevHref}
+					<button
+						type="button"
 						aria-label="Previous photo"
-						class="absolute left-3 top-1/2 -translate-y-1/2 p-2 rounded-full bg-black/50 text-white hover:bg-black/65 transition-colors"
+						on:click={() => goToPhoto(prevHref)}
+						class="absolute z-20 left-4 top-1/2 -translate-y-1/2 w-12 h-12 rounded-full bg-black/25 backdrop-blur-sm text-white hover:bg-black/40 transition-colors flex items-center justify-center"
 					>
-						<svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+						<svg class="w-7 h-7" fill="none" stroke="currentColor" viewBox="0 0 24 24">
 							<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"/>
 						</svg>
-					</a>
+					</button>
 				{/if}
 
 				{#if nextHref}
-					<a
-						href={nextHref}
+					<button
+						type="button"
 						aria-label="Next photo"
-						class="absolute right-3 top-1/2 -translate-y-1/2 p-2 rounded-full bg-black/50 text-white hover:bg-black/65 transition-colors"
+						on:click={() => goToPhoto(nextHref)}
+						class="absolute z-20 right-4 top-1/2 -translate-y-1/2 w-12 h-12 rounded-full bg-black/25 backdrop-blur-sm text-white hover:bg-black/40 transition-colors flex items-center justify-center"
 					>
-						<svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+						<svg class="w-7 h-7" fill="none" stroke="currentColor" viewBox="0 0 24 24">
 							<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/>
 						</svg>
-					</a>
+					</button>
 				{/if}
 			</div>
 		</div>
