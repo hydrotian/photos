@@ -15,15 +15,47 @@ export interface Photo {
 	settings?: string;
 }
 
-export const load: PageLoad = async () => {
-	const photos: Photo[] = photoData as Photo[];
+export interface CategoryCover {
+	category: string;
+	count: number;
+	cover: Photo;
+}
+
+function toTimestamp(value: string) {
+	const ts = new Date(value).getTime();
+	return Number.isNaN(ts) ? 0 : ts;
+}
+
+function sortByDateDesc(a: Photo, b: Photo) {
+	return toTimestamp(b.date) - toTimestamp(a.date) || a.slug.localeCompare(b.slug);
+}
+
+export const load: PageLoad = async ({ url }) => {
+	const photos: Photo[] = (photoData as Photo[]).slice().sort(sortByDateDesc);
 
 	// Get unique categories
-	const categories = [...new Set(photos.map(p => p.category))].sort();
+	const discoveredCategories = [...new Set(photos.map(p => p.category))];
+	const categoryCovers: CategoryCover[] = discoveredCategories
+		.map((category) => {
+			const categoryPhotos = photos.filter((photo) => photo.category === category);
+			return {
+				category,
+				count: categoryPhotos.length,
+				cover: categoryPhotos[0]
+			};
+		})
+		.filter((item): item is CategoryCover => Boolean(item.cover))
+		.sort((a, b) => sortByDateDesc(a.cover, b.cover));
+	const categories = categoryCovers.map((item) => item.category);
+
+	const selectedCategoryParam = (url.searchParams.get('category') || '').trim();
+	const selectedCategory = categories.includes(selectedCategoryParam) ? selectedCategoryParam : 'all';
 
 	return {
 		photos,
-		categories
+		categories,
+		categoryCovers,
+		selectedCategory
 	};
 };
 
