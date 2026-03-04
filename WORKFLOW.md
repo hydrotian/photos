@@ -61,6 +61,11 @@ Optional auto-commit and push:
 npm run process-photos -- /path/to/LR_processed --commit --push
 ```
 
+To delete one category from `static/images/` and remove matching entries from `photo-data.json`:
+```bash
+npm run process-photos -- --delete-category 2024_China_Huangshan
+```
+
 ### 3. Review and Edit Metadata
 
 Open `src/lib/photo-data.json` and add:

@@ -54,6 +54,20 @@ That's it! The script will:
 - ✓ Update the photo database
 - ✓ Categories will appear automatically on the website
 
+### Delete a Category Folder
+
+To remove one category from the website assets and metadata:
+
+```bash
+npm run process-photos -- --delete-category 2024_China_Huangshan
+```
+
+Optional auto-commit and push:
+
+```bash
+npm run process-photos -- --delete-category 2024_China_Huangshan --commit --push
+```
+
 ### Manual Method
 
 If you prefer to add photos manually:

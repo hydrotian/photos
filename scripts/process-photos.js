@@ -5,6 +5,7 @@
  *
  * New mode (recommended):
  *   node scripts/process-photos.js /path/to/LR_processed [--commit] [--push]
+ *   node scripts/process-photos.js --delete-category <category> [--commit] [--push]
  *
  * Legacy mode:
  *   node scripts/process-photos.js
@@ -79,10 +80,13 @@ function generateSlug(filename) {
 function parseArgs(rawArgs) {
 	const args = [...rawArgs];
 	let sourceRoot = null;
+	let deleteCategory = null;
 	let shouldCommit = false;
 	let shouldPush = false;
 
-	for (const arg of args) {
+	for (let i = 0; i < args.length; i += 1) {
+		const arg = args[i];
+
 		if (arg === '--commit') {
 			shouldCommit = true;
 			continue;
@@ -90,6 +94,23 @@ function parseArgs(rawArgs) {
 		if (arg === '--push') {
 			shouldPush = true;
 			shouldCommit = true;
+			continue;
+		}
+		if (arg === '--delete-category' || arg === '--delete-folder') {
+			const nextValue = args[i + 1] || null;
+			if (!nextValue || nextValue.startsWith('-')) {
+				throw new Error(`${arg} requires a category value.`);
+			}
+			deleteCategory = nextValue;
+			i += 1;
+			continue;
+		}
+		if (arg.startsWith('--delete-category=')) {
+			deleteCategory = arg.slice('--delete-category='.length) || null;
+			continue;
+		}
+		if (arg.startsWith('--delete-folder=')) {
+			deleteCategory = arg.slice('--delete-folder='.length) || null;
 			continue;
 		}
 		if (!arg.startsWith('-') && !sourceRoot) {
@@ -100,10 +121,14 @@ function parseArgs(rawArgs) {
 			printUsage();
 			process.exit(0);
 		}
+		if (arg.startsWith('-')) {
+			throw new Error(`Unknown option: ${arg}`);
+		}
 	}
 
 	return {
 		sourceRoot,
+		deleteCategory,
 		shouldCommit,
 		shouldPush
 	};
@@ -112,6 +137,7 @@ function parseArgs(rawArgs) {
 function printUsage() {
 	console.log('Usage:');
 	console.log('  node scripts/process-photos.js /path/to/LR_processed [--commit] [--push]');
+	console.log('  node scripts/process-photos.js --delete-category <category> [--commit] [--push]');
 	console.log('  node scripts/process-photos.js');
 	console.log('');
 	console.log('New mode expects first-level folders such as Birds/, Travel/, 2025_China_trip/.');
@@ -281,7 +307,7 @@ function runGit(args) {
 	return result.stdout?.trim() || '';
 }
 
-function maybeCommitAndPush({ shouldCommit, shouldPush, processedCount, skippedCount, sourceRoot }) {
+function maybeCommitAndPush({ shouldCommit, shouldPush, commitMessage }) {
 	if (!shouldCommit) {
 		return;
 	}
@@ -296,8 +322,6 @@ function maybeCommitAndPush({ shouldCommit, shouldPush, processedCount, skippedC
 		return;
 	}
 
-	const sourceName = path.basename(sourceRoot);
-	const commitMessage = `Import photos from ${sourceName} (${processedCount} new, ${skippedCount} skipped)`;
 	runGit(['commit', '-m', commitMessage, '--', 'src/lib/photo-data.json', 'static/images']);
 	console.log(`Committed changes: ${commitMessage}`);
 
@@ -305,6 +329,56 @@ function maybeCommitAndPush({ shouldCommit, shouldPush, processedCount, skippedC
 		runGit(['push']);
 		console.log('Pushed commit to remote.');
 	}
+}
+
+function resolveCategoryPath(category) {
+	if (category.includes('/') || category.includes('\\')) {
+		throw new Error(`Category should be a single folder name, got: ${category}`);
+	}
+
+	const target = path.resolve(STATIC_IMAGES_DIR, category);
+	const root = path.resolve(STATIC_IMAGES_DIR);
+
+	if (!target.startsWith(`${root}${path.sep}`)) {
+		throw new Error(`Invalid category name: ${category}`);
+	}
+
+	return target;
+}
+
+async function runDeleteCategoryMode(categoryInput, options) {
+	const category = categorySlug(categoryInput || '');
+	if (!category) {
+		throw new Error('Category is required for delete mode. Use --delete-category <category>.');
+	}
+
+	const categoryDir = resolveCategoryPath(category);
+	const hasCategoryDir = fs.existsSync(categoryDir);
+
+	const existingPhotos = loadPhotoData();
+	const filteredPhotos = existingPhotos.filter((photo) => photo.category !== category);
+	const removedCount = existingPhotos.length - filteredPhotos.length;
+
+	if (hasCategoryDir) {
+		fs.rmSync(categoryDir, { recursive: true, force: true });
+		console.log(`Deleted folder: ${categoryDir}`);
+	}
+
+	if (removedCount > 0) {
+		savePhotoData(filteredPhotos);
+		console.log(`Removed ${removedCount} photo metadata entr${removedCount === 1 ? 'y' : 'ies'} from ${DATA_FILE}`);
+	}
+
+	if (!hasCategoryDir && removedCount === 0) {
+		console.log(`Nothing to delete for category "${category}".`);
+		return;
+	}
+
+	maybeCommitAndPush({
+		shouldCommit: options.shouldCommit,
+		shouldPush: options.shouldPush,
+		commitMessage: `Delete category ${category} (${removedCount} metadata removed)`
+	});
 }
 
 async function runBatchMode(sourceRoot, options) {
@@ -361,9 +435,7 @@ async function runBatchMode(sourceRoot, options) {
 		maybeCommitAndPush({
 			shouldCommit: options.shouldCommit,
 			shouldPush: options.shouldPush,
-			processedCount,
-			skippedCount,
-			sourceRoot: resolvedSourceRoot
+			commitMessage: `Import photos from ${path.basename(resolvedSourceRoot)} (${processedCount} new, ${skippedCount} skipped)`
 		});
 		return;
 	}
@@ -378,9 +450,7 @@ async function runBatchMode(sourceRoot, options) {
 	maybeCommitAndPush({
 		shouldCommit: options.shouldCommit,
 		shouldPush: options.shouldPush,
-		processedCount,
-		skippedCount,
-		sourceRoot: resolvedSourceRoot
+		commitMessage: `Import photos from ${path.basename(resolvedSourceRoot)} (${processedCount} new, ${skippedCount} skipped)`
 	});
 }
 
@@ -452,6 +522,17 @@ async function runLegacyMode() {
 
 async function main() {
 	const args = parseArgs(process.argv.slice(2));
+	if (args.sourceRoot && args.deleteCategory) {
+		throw new Error('Use either import mode or delete mode, not both in one command.');
+	}
+
+	if (args.deleteCategory) {
+		await runDeleteCategoryMode(args.deleteCategory, {
+			shouldCommit: args.shouldCommit,
+			shouldPush: args.shouldPush
+		});
+		return;
+	}
 
 	if (args.sourceRoot) {
 		await runBatchMode(args.sourceRoot, {
