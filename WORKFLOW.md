@@ -48,7 +48,8 @@ npm run process-photos -- /path/to/LR_processed
 The script will:
 - Scan each first-level subfolder as a category
 - Find supported image files recursively (`.jpg`, `.jpeg`, `.png`, `.webp`, `.tif`, `.tiff`, `.heic`, `.heif`)
-- Detect existing photos by `category + slug` and skip them
+- Name generated photos as `<category>_01`, `<category>_02`, ... (used for filename, slug, and title)
+- Detect existing photos by source path (plus legacy `category + slug`) and skip them
 - For each new photo:
   - Create resized full image as WebP (max 2400x2400, quality 82)
   - Create thumbnail as WebP (`-thumb.webp`, 800x800, quality 82)

@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { base } from '$app/paths';
+	import { page } from '$app/stores';
 	import type { PageData } from './$types';
 
 	export let data: PageData;
@@ -8,6 +9,20 @@
 	function formatCategory(name: string) {
 		return name.replace(/_/g, ' ');
 	}
+
+	$: requestedCategory = (new URL($page.url.href).searchParams.get('category') || '').trim();
+	$: hasRequestedContext = Boolean(
+		requestedCategory && data.photos.some((p) => p.slug === photo.slug && p.category === requestedCategory)
+	);
+	$: activeCategory = hasRequestedContext ? requestedCategory : photo.category;
+	$: categoryQuery = `?category=${encodeURIComponent(activeCategory)}`;
+	$: backHref = `${base}/${categoryQuery}`;
+	$: categoryPhotos = data.photos.filter((p) => p.category === activeCategory);
+	$: currentIndex = categoryPhotos.findIndex((p) => p.slug === photo.slug && p.category === photo.category);
+	$: prevPhoto = currentIndex > 0 ? categoryPhotos[currentIndex - 1] : null;
+	$: nextPhoto = currentIndex >= 0 && currentIndex < categoryPhotos.length - 1 ? categoryPhotos[currentIndex + 1] : null;
+	$: prevHref = prevPhoto ? `${base}/photo/${prevPhoto.slug}${categoryQuery}` : null;
+	$: nextHref = nextPhoto ? `${base}/photo/${nextPhoto.slug}${categoryQuery}` : null;
 </script>
 
 <svelte:head>
@@ -18,7 +33,7 @@
 <div class="max-w-[96rem] mx-auto px-3 sm:px-4 lg:px-6 py-8 lg:py-10">
 	<!-- Back button -->
 	<a
-		href="{base}{data.backHref}"
+		href={backHref}
 		class="inline-flex items-center text-gray-600 hover:text-gray-900 mb-8 transition-colors"
 	>
 		<svg class="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -37,9 +52,9 @@
 					class="w-full h-auto"
 				/>
 
-				{#if data.prevHref}
+				{#if prevHref}
 					<a
-						href="{base}{data.prevHref}"
+						href={prevHref}
 						aria-label="Previous photo"
 						class="absolute left-3 top-1/2 -translate-y-1/2 p-2 rounded-full bg-black/50 text-white hover:bg-black/65 transition-colors"
 					>
@@ -49,9 +64,9 @@
 					</a>
 				{/if}
 
-				{#if data.nextHref}
+				{#if nextHref}
 					<a
-						href="{base}{data.nextHref}"
+						href={nextHref}
 						aria-label="Next photo"
 						class="absolute right-3 top-1/2 -translate-y-1/2 p-2 rounded-full bg-black/50 text-white hover:bg-black/65 transition-colors"
 					>

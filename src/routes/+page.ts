@@ -30,7 +30,7 @@ function sortByDateDesc(a: Photo, b: Photo) {
 	return toTimestamp(b.date) - toTimestamp(a.date) || a.slug.localeCompare(b.slug);
 }
 
-export const load: PageLoad = async ({ url }) => {
+export const load: PageLoad = async () => {
 	const photos: Photo[] = (photoData as Photo[]).slice().sort(sortByDateDesc);
 
 	// Get unique categories
@@ -48,14 +48,10 @@ export const load: PageLoad = async ({ url }) => {
 		.sort((a, b) => sortByDateDesc(a.cover, b.cover));
 	const categories = categoryCovers.map((item) => item.category);
 
-	const selectedCategoryParam = (url.searchParams.get('category') || '').trim();
-	const selectedCategory = categories.includes(selectedCategoryParam) ? selectedCategoryParam : 'all';
-
 	return {
 		photos,
 		categories,
-		categoryCovers,
-		selectedCategory
+		categoryCovers
 	};
 };
 

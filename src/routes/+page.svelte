@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { base } from '$app/paths';
+	import { page } from '$app/stores';
 	import type { PageData } from './$types';
 
 	export let data: PageData;
@@ -15,7 +16,8 @@
 		return name.replace(/_/g, ' ');
 	}
 
-	$: selectedCategory = data.selectedCategory;
+	$: selectedCategoryParam = (new URL($page.url.href).searchParams.get('category') || '').trim();
+	$: selectedCategory = data.categories.includes(selectedCategoryParam) ? selectedCategoryParam : 'all';
 	$: categoryQuery = selectedCategory === 'all' ? '' : `?category=${encodeURIComponent(selectedCategory)}`;
 	$: filteredPhotos = selectedCategory === 'all'
 		? []
@@ -27,7 +29,7 @@
 	<meta name="description" content="Photography portfolio by Tian Zhou" />
 </svelte:head>
 
-	<div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-10">
+<div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-10">
 	<!-- Hero Section -->
 	<div class="text-center mb-12">
 		<h1 class="text-4xl md:text-5xl font-light text-gray-900 mb-4">

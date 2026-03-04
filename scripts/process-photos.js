@@ -12,7 +12,7 @@
  *
  * In new mode:
  * - Each first-level folder under source root becomes a website category.
- * - New photos are detected by (category + slug) against src/lib/photo-data.json.
+ * - New photos are detected by source path (plus legacy category+slug fallback).
  * - Full images are resized/compressed to web-friendly WebP output.
  */
 
@@ -66,15 +66,72 @@ function photoKey(category, slug) {
 	return `${category}::${slug}`;
 }
 
-function titleFromSlug(slug) {
-	return slug.split('-').map((word) => word.charAt(0).toUpperCase() + word.slice(1)).join(' ');
-}
-
 function generateSlug(filename) {
 	return path.basename(filename, path.extname(filename))
 		.toLowerCase()
 		.replace(/[^a-z0-9]+/g, '-')
 		.replace(/(^-|-$)/g, '');
+}
+
+function sourceKey(category, sourcePath) {
+	return `${category}::${sourcePath.toLowerCase()}`;
+}
+
+function toPosixPath(inputPath) {
+	return inputPath.replace(/\\/g, '/');
+}
+
+function escapeRegExp(value) {
+	return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+function extractCategoryIndex(category, value) {
+	if (typeof value !== 'string') return 0;
+	const pattern = new RegExp(`^${escapeRegExp(category)}_(\\d+)$`);
+	const match = value.match(pattern);
+	if (!match) return 0;
+	const parsed = Number.parseInt(match[1], 10);
+	return Number.isNaN(parsed) ? 0 : parsed;
+}
+
+function buildCategoryCounters(existingPhotos) {
+	const counters = new Map();
+
+	for (const photo of existingPhotos) {
+		const category = photo.category;
+		if (!category) continue;
+
+		const slugIndex = extractCategoryIndex(category, String(photo.slug || ''));
+		const imageStem = typeof photo.image === 'string'
+			? path.basename(photo.image, path.extname(photo.image))
+			: '';
+		const imageIndex = extractCategoryIndex(category, imageStem);
+		const maxIndex = Math.max(slugIndex, imageIndex);
+
+		if (maxIndex > (counters.get(category) || 0)) {
+			counters.set(category, maxIndex);
+		}
+	}
+
+	return counters;
+}
+
+function nextGeneratedName(category, counters) {
+	const nextIndex = (counters.get(category) || 0) + 1;
+	counters.set(category, nextIndex);
+	return `${category}_${String(nextIndex).padStart(2, '0')}`;
+}
+
+function buildExistingSourceKeys(existingPhotos) {
+	const keys = new Set();
+
+	for (const photo of existingPhotos) {
+		if (typeof photo.sourcePath === 'string' && photo.sourcePath) {
+			keys.add(sourceKey(photo.category, photo.sourcePath));
+		}
+	}
+
+	return keys;
 }
 
 function parseArgs(rawArgs) {
@@ -246,18 +303,18 @@ function listFilesRecursive(dir) {
 		}
 	}
 
-	return out;
+	return out.sort((a, b) => a.localeCompare(b));
 }
 
-async function processPhotoFromPath(inputPath, categoryRaw) {
+async function processPhotoFromPath({ inputPath, categoryRaw, generatedName, sourcePath }) {
 	const category = categorySlug(categoryRaw);
-	const slug = generateSlug(path.basename(inputPath));
+	const slug = generatedName;
 
 	const categoryDir = path.join(STATIC_IMAGES_DIR, category);
 	ensureDirExists(categoryDir);
 
-	const fullImageName = `${slug}.webp`;
-	const thumbImageName = `${slug}-thumb.webp`;
+	const fullImageName = `${generatedName}.webp`;
+	const thumbImageName = `${generatedName}-thumb.webp`;
 	const fullImagePath = path.join(categoryDir, fullImageName);
 	const thumbImagePath = path.join(categoryDir, thumbImageName);
 
@@ -270,7 +327,7 @@ async function processPhotoFromPath(inputPath, categoryRaw) {
 		key: photoKey(category, slug),
 		photo: {
 			slug,
-			title: titleFromSlug(slug),
+			title: generatedName,
 			date: exifData.date || todayISO(),
 			location: '',
 			category,
@@ -279,7 +336,8 @@ async function processPhotoFromPath(inputPath, categoryRaw) {
 			description: '',
 			camera: exifData.camera,
 			lens: exifData.lens,
-			settings: exifData.settings
+			settings: exifData.settings,
+			sourcePath
 		}
 	};
 }
@@ -398,6 +456,8 @@ async function runBatchMode(sourceRoot, options) {
 
 	const existingPhotos = loadPhotoData();
 	const existingKeys = new Set(existingPhotos.map((photo) => photoKey(photo.category, photo.slug)));
+	const existingSourceKeys = buildExistingSourceKeys(existingPhotos);
+	const categoryCounters = buildCategoryCounters(existingPhotos);
 	const newPhotos = [];
 
 	let processedCount = 0;
@@ -413,18 +473,28 @@ async function runBatchMode(sourceRoot, options) {
 		}
 
 		console.log(`\nCategory: ${categoryName} (${files.length} image(s))`);
+		const category = categorySlug(categoryName);
 
 		for (const filePath of files) {
-			const slug = generateSlug(path.basename(filePath));
-			const key = photoKey(categorySlug(categoryName), slug);
+			const sourceRelativePath = toPosixPath(path.relative(categoryDir, filePath));
+			const sourceDedupKey = sourceKey(category, sourceRelativePath);
+			const legacySlug = generateSlug(path.basename(filePath));
+			const legacyKey = photoKey(category, legacySlug);
 
-			if (existingKeys.has(key)) {
+			if (existingSourceKeys.has(sourceDedupKey) || existingKeys.has(legacyKey)) {
 				skippedCount += 1;
 				continue;
 			}
 
-			const result = await processPhotoFromPath(filePath, categoryName);
+			const generatedName = nextGeneratedName(category, categoryCounters);
+			const result = await processPhotoFromPath({
+				inputPath: filePath,
+				categoryRaw: categoryName,
+				generatedName,
+				sourcePath: sourceRelativePath
+			});
 			existingKeys.add(result.key);
+			existingSourceKeys.add(sourceDedupKey);
 			newPhotos.push(result.photo);
 			processedCount += 1;
 		}
@@ -494,20 +564,31 @@ async function runLegacyMode() {
 
 	const existingPhotos = loadPhotoData();
 	const existingKeys = new Set(existingPhotos.map((photo) => photoKey(photo.category, photo.slug)));
+	const existingSourceKeys = buildExistingSourceKeys(existingPhotos);
+	const categoryCounters = buildCategoryCounters(existingPhotos);
 	const newPhotos = [];
 
-	for (const fileName of files) {
+	for (const fileName of files.sort((a, b) => a.localeCompare(b))) {
 		const filePath = path.join(TEMP_DIR, fileName);
-		const slug = generateSlug(fileName);
-		const key = photoKey(category, slug);
+		const sourceRelativePath = toPosixPath(fileName);
+		const sourceDedupKey = sourceKey(category, sourceRelativePath);
+		const legacySlug = generateSlug(fileName);
+		const legacyKey = photoKey(category, legacySlug);
 
-		if (existingKeys.has(key)) {
+		if (existingSourceKeys.has(sourceDedupKey) || existingKeys.has(legacyKey)) {
 			console.log(`Skipping existing photo: ${fileName}`);
 			continue;
 		}
 
-		const result = await processPhotoFromPath(filePath, category);
+		const generatedName = nextGeneratedName(category, categoryCounters);
+		const result = await processPhotoFromPath({
+			inputPath: filePath,
+			categoryRaw: category,
+			generatedName,
+			sourcePath: sourceRelativePath
+		});
 		existingKeys.add(result.key);
+		existingSourceKeys.add(sourceDedupKey);
 		newPhotos.push(result.photo);
 	}
 

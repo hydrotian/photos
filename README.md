@@ -46,7 +46,9 @@ This site now has an automated workflow for adding photos!
 5. **Build**: Run `npm run build` to rebuild the site
 
 That's it! The script will:
-- ✓ Detect new photos in existing categories by `category + slug`
+- ✓ Name generated photos as `<category>_01`, `<category>_02`, ...
+- ✓ Use the same generated name for `slug` and `title`
+- ✓ Detect already imported files by source path (and legacy `category + slug`)
 - ✓ Convert and resize full images to web-friendly WebP (`2400px` max edge, quality `82`)
 - ✓ Create thumbnails automatically (800x800px, quality `82`)
 - ✓ Extract EXIF data (camera, lens, settings, date)
